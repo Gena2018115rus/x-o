@@ -27,15 +27,20 @@ win32:LIBS += libopengl32
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+    eth-lib/eth-lib.cpp \
     main.cpp \
-    mainwindow.cpp
+    mainwindow.cpp \
+    waitdialog.cpp
 
 HEADERS += \
+    eth-lib/eth-lib.hpp \
     mainwindow.h \
-    openglwidget.h
+    openglwidget.h \
+    waitdialog.h
 
 FORMS += \
-    mainwindow.ui
+    mainwindow.ui \
+    waitdialog.ui
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

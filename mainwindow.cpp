@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "openglwidget.h"
+#include "eth-lib/eth-lib.hpp"
 
 template <typename T>
 coord_t<T> coord_t<T>::operator+(const coord_t<T>& other) const
@@ -101,9 +102,13 @@ bool mouseStatusIsDown = 0, isClick;
 #define last_click_coord (wnd->last_click_coord)
 //icoord startCursorICoord;
 
-bool stepX = 1;
-extern bool botEnabled;
+bool stepX = 1, waiting = 1;
+extern bool botEnabled, onlineMode;
 extern int N4Win;
+extern std::string out_buf;
+extern std::mutex out_buf_mtx, g_client_mtx, g_connection2host_mtx;
+extern client_ref_t *g_client;
+extern client_t *g_connection2host;
 dcoord cell_size;
 
 line_t getRay(icoord coord, icoord side)
@@ -362,6 +367,33 @@ bool OpenGLWidget::myClickEvent(icoord coord)
 
     setContent(last_click_coord = coord, stepX ? X : O);
 
+    if (onlineMode && !waiting)
+    {
+        std::string line = std::to_string(coord.x()) + '&' + std::to_string(coord.y());
+        std::cout << line << std::endl;
+
+        g_client_mtx.lock();
+        out_buf_mtx.lock();
+        out_buf += line + "\r\n";
+        if (g_client)
+        {
+            if (g_client->write(out_buf)) {
+                out_buf.clear();
+            } else {
+                std::cerr << "Проблема с отправкой данных из буфера клиенту" << std::endl;
+                exit(-101);
+            }
+        }
+        out_buf_mtx.unlock();
+        g_client_mtx.unlock();
+
+        g_connection2host_mtx.lock();
+        if (g_connection2host)
+            g_connection2host->write(line);
+        g_connection2host_mtx.unlock();
+    }
+    waiting ^= 1;
+
     if (calcLongestLineLen(coord) >= size_t(N4Win))
     {
         QMessageBox::about(this, "Игра окончена", QString(stepX ? "Крест" : "Нол") + "ики победили!");
@@ -399,7 +431,7 @@ void MainWindow::mouseReleaseEvent(QMouseEvent *event)
 
 
     static bool weHaveAWinner;
-    if (isClick && !weHaveAWinner)
+    if (isClick && !weHaveAWinner && (!onlineMode || !waiting))
     {
         auto&& click_coord = d2icoord(getCursorCoord() + -mapCoord);
 
