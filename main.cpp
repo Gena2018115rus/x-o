@@ -26,10 +26,11 @@ int main(int argc, char *argv[])
     {
         onlineMode = true;
         static std::regex re{"(-?\\d+)&(-?\\d+)"};
+        static auto wait_dialog = new WaitDialog(&w);
+        QObject::connect(wait_dialog, SIGNAL(onNewClickCoordReceived(icoord)), w.get_openGLWidget(), SLOT(myClickEvent(icoord)), Qt::BlockingQueuedConnection); // переделать с использованием QMetaObject::invokeMethod чтобы не добавлять костыль в wait_dialog
         if (QMessageBox::question(&w, "Ещё пара вопросов..", "Быть хостом?", QMessageBox::Yes, QMessageBox::No) == QMessageBox::Yes)
         {
             static int port = QInputDialog::getInt(&w, "Порт по умолчанию 20181", "На каком порту слушать? [0-65535]", 20181, 0, 65535);
-            static auto wait_dialog = new WaitDialog(&w);
             wait_dialog->setText("Ждём подключения к порту " + QString::number(port) + "...");
             static bool connection_established = false;
 
@@ -47,6 +48,7 @@ int main(int argc, char *argv[])
                         } else {
                             std::cerr << "Проблема с отправкой первых значений из буфера клиенту" << std::endl;
                             exit(-100);
+//                            a.closeAllWindows();  .exit()    ?     +сделать защиту от одновременных подключений к серверу       а потом кто-нибудь мог бы добавить режим наблюдателя
                         }
                     }
                     out_buf_mtx.unlock();
@@ -56,8 +58,9 @@ int main(int argc, char *argv[])
                     std::smatch m;
                     if (std::regex_match(msg, m, re)) {
                         std::cout << "x = " << m[1] << "; y = " << m[2] << ';' << std::endl;
-                        w.get_openGLWidget()->myClickEvent({{stoi(m[1]), stoi(m[2])}});
-                        w.get_openGLWidget()->update();
+                        emit wait_dialog->onNewClickCoordReceived({{stoi(m[1]), stoi(m[2])}}); // надо записывать результат в weHaveAWinner
+//                        QMetaObject::invokeMethod();
+                        w.get_openGLWidget()->update(); // перенести update в myClickEvent?
                     }
                 });
             }).detach();
@@ -74,6 +77,7 @@ int main(int argc, char *argv[])
                 w.get_openGLWidget()->update();
                 out_buf_mtx.lock();
                 out_buf += "ClientIsFirst\r\n";
+                // TODO: if (g_client) if (g_client->write(out_buf)) { ...         только вынести бы это ещё в функцию  типа flush
                 out_buf_mtx.unlock();
                 waiting = false;
             }
@@ -108,7 +112,7 @@ int main(int argc, char *argv[])
                             std::smatch m;
                             if (std::regex_match(line, m, re)) {
                                 std::cout << "x = " << m[1] << "; y = " << m[2] << ';' << std::endl;
-                                w.get_openGLWidget()->myClickEvent({{stoi(m[1]), stoi(m[2])}});
+                                emit wait_dialog->onNewClickCoordReceived({{stoi(m[1]), stoi(m[2])}}); // надо записывать результат в weHaveAWinner
                                 w.get_openGLWidget()->update();
                             } else if (line == "ClientIsFirst") {
                                 waiting = true; // мб ещё мьютексов посоздавать для переменных которые в обоих потоках используются?

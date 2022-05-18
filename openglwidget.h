@@ -15,7 +15,6 @@ public:
 //    void resizeGL(int w, int h) override;
     bool event(QEvent *event) override;
 
-    bool myClickEvent(icoord e);
     void drawLines(std::vector<dcoord> points, double r, double g, double b);
     void drawLineLoop(std::vector<dcoord> points, double r, double g, double b);
     void drawContent(icoord coord, double r, double g, double b);
@@ -24,8 +23,8 @@ public:
     int vertCoordAttr;
     int vertColorAttr;
 
-private:
-
+public slots:
+    bool myClickEvent(icoord e);
 };
 
 #endif // OPENGLWIDGET_H
