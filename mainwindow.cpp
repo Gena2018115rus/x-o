@@ -30,7 +30,7 @@ OpenGLWidget::~OpenGLWidget()
 {
 }
 
-void OpenGLWidget::initializeGL() // пофиксить чёрный экран на старых системах
+void OpenGLWidget::initializeGL() // пофиксить чёрный экран на старых системах и в rdp!
 {
     glClearColor(0.0, 0.0, 0.0, 0.0);
 

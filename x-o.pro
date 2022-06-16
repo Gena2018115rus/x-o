@@ -11,6 +11,7 @@ CONFIG += console
 #QMAKE_CXXFLAGS += -Os
 #QMAKE_CXXFLAGS += -Wall
 QMAKE_CXXFLAGS += -Wno-deprecated-copy
+QMAKE_CXXFLAGS += -DIT_IS_SERVER=0
 
 win32:LIBS += libopengl32
 
@@ -27,18 +28,21 @@ win32:LIBS += libopengl32
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+    clientwindow.cpp \
     eth-lib/eth-lib.cpp \
     main.cpp \
     mainwindow.cpp \
     waitdialog.cpp
 
 HEADERS += \
+    clientwindow.h \
     eth-lib/eth-lib.hpp \
     mainwindow.h \
     openglwidget.h \
     waitdialog.h
 
 FORMS += \
+    clientwindow.ui \
     mainwindow.ui \
     waitdialog.ui
 
