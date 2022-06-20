@@ -11,7 +11,6 @@ CONFIG += console
 #QMAKE_CXXFLAGS += -Os
 #QMAKE_CXXFLAGS += -Wall
 QMAKE_CXXFLAGS += -Wno-deprecated-copy
-QMAKE_CXXFLAGS += -DIT_IS_SERVER=0
 
 win32:LIBS += libopengl32
 

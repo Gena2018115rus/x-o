@@ -20,6 +20,8 @@ private slots:
 
     void on_m_pPbStartGame_clicked();
 
+    void on_m_pPbWait_clicked();
+
 private:
     Ui::ClientWindow *ui;
 };

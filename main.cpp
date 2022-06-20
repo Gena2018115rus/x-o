@@ -11,23 +11,54 @@ int N4Win;
 extern bool stepX, waiting;
 MainWindow *wnd;
 std::string out_buf, in_buf;
-std::mutex out_buf_mtx/*, in_buf_mtx*/, g_client_mtx, g_connection2host_mtx;
+std::mutex out_buf_mtx/*, in_buf_mtx*/, g_client_mtx, g_connection2host_mtx, g_connection_established_mtx;
 client_ref_t *g_client;
 client_t *g_connection2host;
 const std::regex re{"(-?\\d+)&(-?\\d+)"};
+bool g_connection_established;
+extern std::string nickname;
+
+struct client_data_t {
+    client_ref_t ref;
+    std::string opponent_name;
+};
+
+struct out_buf_t {
+    std::string data;
+    std::mutex mtx;
+};
+
+std::map<std::string, client_ref_t> unknown_clients;
+std::map<std::string, client_ref_t> waiting_clients;
+std::map<std::string, client_data_t> playing_clients;
+std::map<std::string, out_buf_t> out_bufs;
+
+bool flush(std::string addr) {
+    if (unknown_clients.at(addr).write(out_bufs.at(addr).data)) {
+        out_bufs.at(addr).data.clear();
+    } else {
+        std::cerr << "Проблема с отправкой данных из буфера клиенту" << std::endl;
+        exit(-201);
+    }
+}
 
 int main(int argc, char *argv[])
 {
-    if (IT_IS_SERVER) {
-        std::cout << "SERVER OK" << std::endl;
+    if (argc < 2) {
+        std::cerr << "Надо указать адрес сервера или режим сервера. Например localhost:20181 или -server" << std::endl;
+    }
 
-        static std::vector<client_ref_t> clients;
+    if (argv[1] == std::string("-server")) {
+        std::cout << "SERVER OK" << std::endl;
 
         (std::cout << "введите порт сервера: ").flush();
         int port;
         std::cin >> port;
-        listener_t(port).run([](client_ref_t client) { // сделать нормальное сообщение если порт занят
-            clients.push_back(std::move(client));
+        listener_t(port).listen([](client_ref_t client) { // сделать нормальное сообщение если порт занят
+            std::string client_addr = client.addr();
+            std::cout << client_addr << " подключился" << std::endl;
+            unknown_clients.emplace(client_addr, std::move(client));
+            out_bufs.try_emplace(client_addr);
             g_client_mtx.lock();
 //            g_client = &s_client;
 //                connection_established = true;
@@ -52,9 +83,30 @@ int main(int argc, char *argv[])
 //                    emit wait_dialog->onNewClickCoordReceived({{stoi(m[1]), stoi(m[2])}}); // надо записывать результат в weHaveAWinner
 //                        QMetaObject::invokeMethod();
 //                    w.get_openGLWidget()->update(); // перенести update в myClickEvent?
+            } else if (std::regex_match(msg, m, std::regex{"HELLO=(.*)"})) {
+                std::string client_name = m[1];
+                if (client_name == "") {
+//                    out_bufs.at(addr).mtx.lock(); // TODO?: синхронизация доступа к out_bufs
+                    out_bufs.at(addr).data += "HELLO: ERR\r\n";
+                    flush(addr);
+//                    out_buf_mtx.unlock();
+                    return;
+                }
+                auto node_handle = unknown_clients.extract(addr);
+                node_handle.key() = nickname;
+                waiting_clients.insert(std::move(node_handle));
+                std::cout << "начал ждать человек \"" << client_name << '"' << std::endl;
+            } else if (msg == "GetWaitingClients") {
+                for (auto &p : waiting_clients) {
+                    out_bufs.at(addr).data += p.first + "\r\n";
+                }
+                out_bufs.at(addr).data += "\r\n";
+                flush(addr);
             } else if (1) {
                 std::cout << '"' << msg << '"' << std::endl;
             }
+        }, [](std::string addr) {
+            std::cout << addr << " отключился" << std::endl;
         });
 
 
@@ -65,63 +117,74 @@ int main(int argc, char *argv[])
 
     QApplication a(argc, argv);
 
-    std::thread([] {
-        std::string server_full_addr;
-        std::getline(std::ifstream("SERVER_ADDRESS.txt"), server_full_addr);
+    std::thread([&] {
+        std::string server_full_addr = argv[1];
         auto index = server_full_addr.find(":");
         std::string server_addr = {server_full_addr.begin(), server_full_addr.begin() + index}, server_port = {server_full_addr.begin() + index + 1, server_full_addr.end()};
         std::cout << server_addr << ' ' << server_port << std::endl;
 
-//        client_t client(server_addr, server_port);
-//        g_connection2host_mtx.lock();
-//        g_connection2host = &client;
-//        g_connection2host_mtx.unlock();
-//        client.listen([&](std::string chunk) {
-//            std::cout << chunk << std::endl;
-////                    in_buf_mtx.lock();
-//            in_buf += chunk;
-//            for (;;) {
-//                auto index = in_buf.find("\r\n");
-//                if (index != (size_t)-1) {
-//                    std::string line = {in_buf.begin(), in_buf.begin() + index};
-//                    in_buf = {in_buf.begin() + index + 2, in_buf.end()};
-//                    // обработка line
-//                    std::cout << "найдено: >>>" << line << "<<<" << std::endl;
-//                    std::smatch m;
-//                    if (std::regex_match(line, m, re)) {
-//                        std::cout << "x = " << m[1] << "; y = " << m[2] << ';' << std::endl;
+        client_t client(server_addr, server_port);
+        g_connection2host_mtx.lock();
+        g_connection2host = &client;
+        g_connection2host_mtx.unlock();
+        client.run([&](std::string chunk) {
+            std::cout << chunk << std::endl;
+//                    in_buf_mtx.lock();
+            in_buf += chunk;
+            for (;;) {
+                auto index = in_buf.find("\r\n");
+                if (index != (size_t)-1) {
+                    std::string line = {in_buf.begin(), in_buf.begin() + index};
+                    in_buf = {in_buf.begin() + index + 2, in_buf.end()};
+                    // обработка line
+                    std::cout << "найдено: >>>" << line << "<<<" << std::endl;
+                    std::smatch m;
+                    if (std::regex_match(line, m, re)) {
+                        std::cout << "x = " << m[1] << "; y = " << m[2] << ';' << std::endl;
 //                        emit wait_dialog->onNewClickCoordReceived({{stoi(m[1]), stoi(m[2])}}); // надо записывать результат в weHaveAWinner
 //                        w.get_openGLWidget()->update();
-//                    } else if (line == "ClientIsFirst") {
-//                        waiting = true; // мб ещё мьютексов посоздавать для переменных которые в обоих потоках используются?
-//                    } else if (std::regex_match(line, m, std::regex{"N4Win=(\\d+)"})) {
-//                        std::cout << "N4Win = " << m[1] << '!' << std::endl;
-//                        N4Win = stoi(m[1]);
-//                    }
-//                } else {
-//                    break;
-//                }
-//            }
-////                    in_buf_mtx.unlock();
-//        });
+                    } else if (line == "ClientIsFirst") {
+                        waiting = true; // мб ещё мьютексов посоздавать для переменных которые в обоих потоках используются?
+                    } else if (std::regex_match(line, m, std::regex{"N4Win=(\\d+)"})) {
+                        std::cout << "N4Win = " << m[1] << '!' << std::endl;
+                        N4Win = stoi(m[1]);
+                    }
+                } else {
+                    break;
+                }
+            }
+//                    in_buf_mtx.unlock();
+        });
     }).detach();
 
     auto client_window = new ClientWindow;
     client_window->show();
-    if (!a.exec()) {
+    auto ret_code = a.exec();
+    if (!ret_code) {
         return 0;
     }
     delete client_window;
-
-
-
-
-
 
     MainWindow w;
 //    w.setAttribute(Qt::WA_AcceptTouchEvents);
     wnd = &w;
     w.show();
+
+    if (ret_code == 2) {
+        onlineMode = true;
+        static auto wait_dialog = new WaitDialog(&w);
+        QObject::connect(wait_dialog, SIGNAL(onNewClickCoordReceived(icoord)), w.get_openGLWidget(), SLOT(myClickEvent(icoord)), Qt::BlockingQueuedConnection); // переделать с использованием QMetaObject::invokeMethod чтобы не добавлять костыль в wait_dialog
+        wait_dialog->setText("Ждём, " + QString::fromUtf8(nickname.data(), nickname.size()) + "...");
+
+
+
+        while (!g_connection_established)
+        {
+            wait_dialog->exec();
+        }
+
+        return a.exec();
+    }
 
     if (QMessageBox::question(&w, "Привет!", "Играть по сети?", QMessageBox::Yes, QMessageBox::No) == QMessageBox::Yes)
     {
@@ -135,7 +198,7 @@ int main(int argc, char *argv[])
             static bool connection_established = false;
 
             std::thread([&] {
-                listener_t(port).run([](client_ref_t client) { // сделать нормальное сообщение если порт занят
+                listener_t(port).listen([](client_ref_t client) { // сделать нормальное сообщение если порт занят
                     static client_ref_t s_client = std::move(client);
                     g_client_mtx.lock();
                     g_client = &s_client;
@@ -162,6 +225,8 @@ int main(int argc, char *argv[])
 //                        QMetaObject::invokeMethod();
                         w.get_openGLWidget()->update(); // перенести update в myClickEvent?
                     }
+                }, [](std::string addr) {
+                    // TODO: обработать отключение
                 });
             }).detach();
 
@@ -198,7 +263,7 @@ int main(int argc, char *argv[])
                 g_connection2host_mtx.lock();
                 g_connection2host = &client;
                 g_connection2host_mtx.unlock();
-                client.listen([&](std::string chunk) {
+                client.run([&](std::string chunk) {
                     std::cout << chunk << std::endl;
 //                    in_buf_mtx.lock();
                     in_buf += chunk;
