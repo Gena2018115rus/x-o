@@ -425,18 +425,12 @@ icoord getBestCoord()
 
 void MainWindow::mouseReleaseEvent(QMouseEvent *event)
 {
-//    std::cout << "mouse up " << event->x() << 'x' << event->y() << std::endl;
     mouseStatusIsDown = 0;
     if (isTouch) return;
-
-
     static bool weHaveAWinner;
     if (isClick && !weHaveAWinner && (!onlineMode || !waiting))
     {
         auto&& click_coord = d2icoord(getCursorCoord() + -mapCoord);
-
-//        std::cout << click_coord.x() << 'x' << click_coord.y() << std::endl;
-
         if (!getCellInfo(click_coord).content && !(weHaveAWinner = this->ui->openGLWidget->myClickEvent(click_coord)) && botEnabled)
         {
             // человек походил, не выиграл, очередь бота

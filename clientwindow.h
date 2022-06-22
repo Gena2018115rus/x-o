@@ -15,6 +15,10 @@ public:
     explicit ClientWindow(QWidget *parent = nullptr);
     ~ClientWindow();
 
+public slots:
+    void updateWaitingClients(std::string list);
+    void connect2opponent();
+
 private slots:
     void on_m_pPbQuit_clicked();
 
@@ -24,6 +28,11 @@ private slots:
 
 private:
     Ui::ClientWindow *ui;
+};
+
+struct client_settings_t {
+    int N4Win;
+    bool opponent_is_first;
 };
 
 #endif // CLIENTWINDOW_H

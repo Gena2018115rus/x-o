@@ -7,17 +7,24 @@
     <x>0</x>
     <y>0</y>
     <width>275</width>
-    <height>35</height>
+    <height>66</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Ждём</string>
   </property>
-  <layout class="QHBoxLayout" name="horizontalLayout">
+  <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="QLabel" name="label">
      <property name="text">
       <string>Ждём подключения к порту 99999...</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="m_pPbCloseProgram">
+     <property name="text">
+      <string>Закрыть программу</string>
      </property>
     </widget>
    </item>

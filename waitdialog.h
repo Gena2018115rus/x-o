@@ -17,11 +17,16 @@ public:
     ~WaitDialog();
     void setText(QString s);
 
+public slots:
+    void helloErr();
+
 private:
     Ui::WaitDialog *ui;
 
 signals:
     bool onNewClickCoordReceived(icoord coord);
+private slots:
+    void on_m_pPbCloseProgram_clicked();
 };
 
 #endif // WAITDIALOG_H

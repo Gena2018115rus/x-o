@@ -17,3 +17,13 @@ void WaitDialog::setText(QString s)
 {
     ui->label->setText(s);
 }
+
+void WaitDialog::on_m_pPbCloseProgram_clicked()
+{
+    exit(0);
+}
+
+void WaitDialog::helloErr() {
+    QMessageBox::information(this, "Упс!", "Ошибка, имя уже занято");
+    exit(0);
+}
